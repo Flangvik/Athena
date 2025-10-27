@@ -309,6 +309,14 @@ class athena(PayloadType):
                         configData = base64.b64encode(configData.encode('utf-8')).decode('utf-8')
                 baseConfigFile = baseConfigFile.replace("%RAW_C2_CONFIG%", configData)
         
+        # Replace any remaining placeholders with empty defaults
+        baseConfigFile = baseConfigFile.replace("%TIMEOUT%", "240")
+        baseConfigFile = baseConfigFile.replace("%PROXY_HOST%", "")
+        baseConfigFile = baseConfigFile.replace("%PROXY_PORT%", "0")
+        baseConfigFile = baseConfigFile.replace("%PROXY_USER%", "")
+        baseConfigFile = baseConfigFile.replace("%PROXY_PASS%", "")
+        baseConfigFile = baseConfigFile.replace("%DOMAIN_FRONT%", "")
+        
         with open("{}/Agent.Profiles.Httpx/HttpxProfile.cs".format(agent_build_path.name), "w") as f:
             f.write(baseConfigFile)
         self.addProfile(agent_build_path, "Httpx")
