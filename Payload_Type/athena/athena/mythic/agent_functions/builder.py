@@ -488,6 +488,7 @@ class athena(PayloadType):
                     await self.buildHTTP(agent_build_path, c2)
                 elif profile["name"] == "httpx":
                     roots_replace += "<assembly fullname=\"Agent.Profiles.Httpx\"/>" + '\n'
+                    roots_replace += "<assembly fullname=\"Agent.Profiles.HttpxTransform\"/>" + '\n'
                     await self.buildHttpx(agent_build_path, c2)
                 elif profile["name"] == "smb":
                     roots_replace += "<assembly fullname=\"Agent.Profiles.SMB\"/>" + '\n'

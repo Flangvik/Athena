@@ -193,6 +193,7 @@ Global
 		LocalDebugDiscord|Any CPU = LocalDebugDiscord|Any CPU
 		LocalDebugGitHub|Any CPU = LocalDebugGitHub|Any CPU
 		LocalDebugHttp|Any CPU = LocalDebugHttp|Any CPU
+		LocalDebugHttpx|Any CPU = LocalDebugHttpx|Any CPU
 		LocalDebugSmb|Any CPU = LocalDebugSmb|Any CPU
 		LocalDebugWebsocket|Any CPU = LocalDebugWebsocket|Any CPU
 		Release|Any CPU = Release|Any CPU
@@ -388,6 +389,8 @@ Global
 		{B1C8F456-9E3D-4A12-A8F5-7D2E4B6C8901}.LocalDebugGitHub|Any CPU.Build.0 = LocalDebugGitHub|Any CPU
 		{B1C8F456-9E3D-4A12-A8F5-7D2E4B6C8901}.LocalDebugHttp|Any CPU.ActiveCfg = LocalDebugHttp|Any CPU
 		{B1C8F456-9E3D-4A12-A8F5-7D2E4B6C8901}.LocalDebugHttp|Any CPU.Build.0 = LocalDebugHttp|Any CPU
+		{B1C8F456-9E3D-4A12-A8F5-7D2E4B6C8901}.LocalDebugHttpx|Any CPU.ActiveCfg = LocalDebugHttpx|Any CPU
+		{B1C8F456-9E3D-4A12-A8F5-7D2E4B6C8901}.LocalDebugHttpx|Any CPU.Build.0 = LocalDebugHttpx|Any CPU
 		{B1C8F456-9E3D-4A12-A8F5-7D2E4B6C8901}.LocalDebugSmb|Any CPU.ActiveCfg = LocalDebugSmb|Any CPU
 		{B1C8F456-9E3D-4A12-A8F5-7D2E4B6C8901}.LocalDebugSmb|Any CPU.Build.0 = LocalDebugSmb|Any CPU
 		{B1C8F456-9E3D-4A12-A8F5-7D2E4B6C8901}.LocalDebugWebsocket|Any CPU.ActiveCfg = LocalDebugWebsocket|Any CPU
@@ -402,6 +405,8 @@ Global
 		{C2D9F567-AF4E-4B13-B9F6-8E3F5C7D9012}.LocalDebugGitHub|Any CPU.Build.0 = LocalDebugGitHub|Any CPU
 		{C2D9F567-AF4E-4B13-B9F6-8E3F5C7D9012}.LocalDebugHttp|Any CPU.ActiveCfg = LocalDebugHttp|Any CPU
 		{C2D9F567-AF4E-4B13-B9F6-8E3F5C7D9012}.LocalDebugHttp|Any CPU.Build.0 = LocalDebugHttp|Any CPU
+		{C2D9F567-AF4E-4B13-B9F6-8E3F5C7D9012}.LocalDebugHttpx|Any CPU.ActiveCfg = LocalDebugHttpx|Any CPU
+		{C2D9F567-AF4E-4B13-B9F6-8E3F5C7D9012}.LocalDebugHttpx|Any CPU.Build.0 = LocalDebugHttpx|Any CPU
 		{C2D9F567-AF4E-4B13-B9F6-8E3F5C7D9012}.LocalDebugSmb|Any CPU.ActiveCfg = LocalDebugSmb|Any CPU
 		{C2D9F567-AF4E-4B13-B9F6-8E3F5C7D9012}.LocalDebugSmb|Any CPU.Build.0 = LocalDebugSmb|Any CPU
 		{C2D9F567-AF4E-4B13-B9F6-8E3F5C7D9012}.LocalDebugWebsocket|Any CPU.ActiveCfg = LocalDebugWebsocket|Any CPU
