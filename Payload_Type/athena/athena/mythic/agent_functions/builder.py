@@ -277,9 +277,12 @@ class athena(PayloadType):
             elif key == "callback_domains":
                 # Handle array of domains
                 if isinstance(val, list):
-                    baseConfigFile = baseConfigFile.replace(f'"{key}".Split(\',\')', f'new string[] {{{", ".join([f\'"{d}\'' for d in val])}}}')
+                    # Build the replacement string properly
+                    domain_strings = ['"' + str(d) + '"' for d in val]
+                    domain_array = "new string[] {" + ", ".join(domain_strings) + "}"
+                    baseConfigFile = baseConfigFile.replace("callback_domains", domain_array)
                 else:
-                    baseConfigFile = baseConfigFile.replace(f'"{key}"', str(val))
+                    baseConfigFile = baseConfigFile.replace(key, str(val))
             elif key == "raw_c2_config":
                 # Base64 encode the config if it's not already encoded
                 import base64
@@ -290,9 +293,9 @@ class athena(PayloadType):
                 except:
                     # Not base64, encode it
                     configData = base64.b64encode(str(val).encode('utf-8')).decode('utf-8')
-                baseConfigFile = baseConfigFile.replace(f'"{key}"', configData)
+                baseConfigFile = baseConfigFile.replace(key, configData)
             else:
-                baseConfigFile = baseConfigFile.replace(f'"{key}"', str(val))
+                baseConfigFile = baseConfigFile.replace(key, str(val))
         
         with open("{}/Agent.Profiles.Httpx/HttpxProfile.cs".format(agent_build_path.name), "w") as f:
             f.write(baseConfigFile)

