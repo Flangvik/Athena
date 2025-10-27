@@ -358,10 +358,34 @@ namespace Agent.Profiles
                 // Create HTTP request
                 HttpRequestMessage request = new HttpRequestMessage(new HttpMethod(variation.Verb), url);
                 
+                // Track if we need to set Content-Type on the content object
+                string contentTypeHeader = null;
+                
                 // Add headers
                 foreach (var header in variation.Client.Headers)
                 {
-                    request.Headers.Add(header.Key, header.Value);
+                    // Content-Type and Content-Length must be set on Content, not Headers
+                    if (header.Key.ToLower() == "content-type")
+                    {
+                        contentTypeHeader = header.Value;
+                    }
+                    else if (header.Key.ToLower() == "content-length")
+                    {
+                        // Content-Length is automatically set by HttpClient
+                        continue;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            request.Headers.Add(header.Key, header.Value);
+                        }
+                        catch (Exception)
+                        {
+                            // Some headers can't be set via HttpClient (e.g., restricted headers)
+                            // Continue without that header
+                        }
+                    }
                 }
                 
                 // Handle cookie and header placement
@@ -379,7 +403,15 @@ namespace Agent.Profiles
                 // Add body if needed
                 if (requestBodyBytes != null && requestBodyBytes.Length > 0)
                 {
-                    request.Content = new ByteArrayContent(requestBodyBytes);
+                    var content = new ByteArrayContent(requestBodyBytes);
+                    
+                    // Set Content-Type on the content object if it was specified
+                    if (!string.IsNullOrEmpty(contentTypeHeader))
+                    {
+                        content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse(contentTypeHeader);
+                    }
+                    
+                    request.Content = content;
                 }
 
                 // Send request
