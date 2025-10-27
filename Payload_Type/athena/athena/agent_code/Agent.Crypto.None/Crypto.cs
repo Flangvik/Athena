@@ -62,5 +62,21 @@ namespace Agent.Crypto
         {
             return Misc.Base64Decode(encrypted).Substring(config.uuid.Length);
         }
+
+        /// <summary>
+        /// Update the UUID dynamically (for EKE)
+        /// </summary>
+        /// <param name="newUuid">New UUID</param>
+        public void UpdateUUID(string newUuid)
+        {
+            try
+            {
+                config.uuid = newUuid;
+            }
+            catch
+            {
+                // Ignore invalid UUID updates
+            }
+        }
     }
 }

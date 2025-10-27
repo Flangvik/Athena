@@ -129,5 +129,39 @@ namespace Agent.Crypto
                 return String.Empty;
             }
         }
+
+        /// <summary>
+        /// Update the encryption key dynamically (for EKE)
+        /// </summary>
+        /// <param name="newKey">New AES key in base64 format</param>
+        public void UpdateKey(string newKey)
+        {
+            try
+            {
+                PSK = Convert.FromBase64String(newKey);
+                config.psk = newKey; // Update config as well
+            }
+            catch
+            {
+                // Ignore invalid key updates
+            }
+        }
+
+        /// <summary>
+        /// Update the UUID dynamically (for EKE)
+        /// </summary>
+        /// <param name="newUuid">New UUID</param>
+        public void UpdateUUID(string newUuid)
+        {
+            try
+            {
+                uuid = ASCIIEncoding.ASCII.GetBytes(newUuid);
+                config.uuid = newUuid; // Update config as well
+            }
+            catch
+            {
+                // Ignore invalid UUID updates
+            }
+        }
     }
 }

