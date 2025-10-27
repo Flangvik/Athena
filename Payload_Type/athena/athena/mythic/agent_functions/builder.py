@@ -271,31 +271,47 @@ class athena(PayloadType):
         for key, val in c2.get_parameters_dict().items():
             if key == "encrypted_exchange_check":
                 if val == "T":
-                    baseConfigFile = baseConfigFile.replace(key, "True")
+                    baseConfigFile = baseConfigFile.replace('"encrypted_exchange_check"', "True")
                 else:
-                    baseConfigFile = baseConfigFile.replace(key, "False")
+                    baseConfigFile = baseConfigFile.replace('"encrypted_exchange_check"', "False")
             elif key == "callback_domains":
-                # Handle array of domains
+                # Handle array of domains - replace the entire Split argument
                 if isinstance(val, list):
                     # Build the replacement string properly
                     domain_strings = ['"' + str(d) + '"' for d in val]
                     domain_array = "new string[] {" + ", ".join(domain_strings) + "}"
-                    baseConfigFile = baseConfigFile.replace("callback_domains", domain_array)
+                    baseConfigFile = baseConfigFile.replace('"callback_domains".Split(', domain_array + '.Split(')
                 else:
-                    baseConfigFile = baseConfigFile.replace(key, str(val))
+                    baseConfigFile = baseConfigFile.replace('"callback_domains"', str(val))
+            elif key == "failover_threshold":
+                baseConfigFile = baseConfigFile.replace('"failover_threshold"', str(val))
+            elif key == "timeout":
+                baseConfigFile = baseConfigFile.replace('"timeout"', str(val))
+            elif key == "proxy_host":
+                baseConfigFile = baseConfigFile.replace('"proxy_host"', str(val))
+            elif key == "proxy_port":
+                baseConfigFile = baseConfigFile.replace('"proxy_port"', str(val))
+            elif key == "proxy_user":
+                baseConfigFile = baseConfigFile.replace('"proxy_user"', str(val))
+            elif key == "proxy_pass":
+                baseConfigFile = baseConfigFile.replace('"proxy_pass"', str(val))
+            elif key == "domain_front":
+                baseConfigFile = baseConfigFile.replace('"domain_front"', str(val))
+            elif key == "domain_rotation":
+                baseConfigFile = baseConfigFile.replace('"domain_rotation"', '"' + str(val) + '"')
             elif key == "raw_c2_config":
                 # Base64 encode the config if it's not already encoded
                 import base64
                 try:
                     # Try to decode to check if already base64
                     base64.b64decode(str(val))
-                    configData = str(val)
+                    configData = '"' + str(val) + '"'
                 except:
                     # Not base64, encode it
-                    configData = base64.b64encode(str(val).encode('utf-8')).decode('utf-8')
-                baseConfigFile = baseConfigFile.replace(key, configData)
+                    configData = '"' + base64.b64encode(str(val).encode('utf-8')).decode('utf-8') + '"'
+                baseConfigFile = baseConfigFile.replace('"raw_c2_config"', configData)
             else:
-                baseConfigFile = baseConfigFile.replace(key, str(val))
+                baseConfigFile = baseConfigFile.replace('"' + key + '"', str(val))
         
         with open("{}/Agent.Profiles.Httpx/HttpxProfile.cs".format(agent_build_path.name), "w") as f:
             f.write(baseConfigFile)
