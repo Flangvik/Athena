@@ -270,6 +270,9 @@ class athena(PayloadType):
         
         import base64
         
+        # Debug: print parameters for troubleshooting
+        logger.info(f"[buildHttpx] Processing C2 profile parameters: {list(c2.get_parameters_dict().keys())}")
+        
         for key, val in c2.get_parameters_dict().items():
             if key == "encrypted_exchange_check":
                 if val == "T":
@@ -306,11 +309,12 @@ class athena(PayloadType):
                 try:
                     # Try to decode to check if already base64
                     base64.b64decode(str(val))
-                    configData = '"' + str(val) + '"'
+                    configData = str(val)
                 except:
                     # Not base64, encode it
-                    configData = '"' + base64.b64encode(str(val).encode('utf-8')).decode('utf-8') + '"'
-                baseConfigFile = baseConfigFile.replace("raw_c2_config", configData)
+                    configData = base64.b64encode(str(val).encode('utf-8')).decode('utf-8')
+                # Use @"" verbatim string to avoid escaping issues with = and other chars
+                baseConfigFile = baseConfigFile.replace("raw_c2_config", '@"' + configData + '"')
             else:
                 baseConfigFile = baseConfigFile.replace(key, str(val))
         
