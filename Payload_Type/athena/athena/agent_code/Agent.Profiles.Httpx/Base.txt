@@ -340,14 +340,19 @@ namespace Agent.Profiles
                             foreach (var param in variation.Client.Parameters)
                             {
                                 if (!string.IsNullOrEmpty(queryParam))
-                                    queryParam += "&";
+                                queryParam += "&";
                                 queryParam += $"{param.Key}={Uri.EscapeDataString(param.Value)}";
                             }
                         }
                         if (!string.IsNullOrEmpty(queryParam))
                             queryParam += "&";
-                        queryParam += $"{variation.Client.Message.Name}={Encoding.UTF8.GetString(transformedData)}";
+                        
+                        // NOTE: transformedData is already URL-safe (base64url/netbios/netbiosu/netbios)
+                        // Do NOT apply Uri.EscapeDataString to avoid double-encoding
+                        string messageData = Encoding.UTF8.GetString(transformedData);
+                        queryParam += $"{variation.Client.Message.Name}={messageData}";
                         url = url.Split('?')[0] + "?" + queryParam;
+                        Console.WriteLine($"[HTTPX DEBUG] Query string length: {queryParam.Length}");
                         break;
                         
                     case "body":
