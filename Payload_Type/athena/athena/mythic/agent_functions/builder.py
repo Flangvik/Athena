@@ -298,15 +298,24 @@ class athena(PayloadType):
             elif key == "domain_front":
                 baseConfigFile = baseConfigFile.replace("%DOMAIN_FRONT%", str(val))
             elif key == "raw_c2_config":
-                # Base64 encode the config if it's not already encoded
-                configData = str(val) if val else ""
-                if configData:
+                # Read the file contents from Mythic
+                configData = ""
+                if val:
                     try:
-                        # Try to decode to check if already base64
-                        base64.b64decode(configData)
-                    except:
-                        # Not base64, encode it
-                        configData = base64.b64encode(configData.encode('utf-8')).decode('utf-8')
+                        # Read configuration file contents
+                        response = await SendMythicRPCFileGetContent(MythicRPCFileGetContentMessage(AgentFileId=val))
+                        
+                        if response.Success:
+                            raw_config_file_data = response.Content.decode('utf-8')
+                            # Base64 encode the config to avoid C# string escaping issues
+                            configData = base64.b64encode(raw_config_file_data.encode('utf-8')).decode('ascii')
+                        else:
+                            logger.error(f"Error reading raw_c2_config file: {response.Error}")
+                            configData = ""
+                    except Exception as err:
+                        logger.error(f"Error processing raw_c2_config: {str(err)}")
+                        configData = ""
+                
                 baseConfigFile = baseConfigFile.replace("%RAW_C2_CONFIG%", configData)
         
         # Replace any remaining placeholders with empty defaults
