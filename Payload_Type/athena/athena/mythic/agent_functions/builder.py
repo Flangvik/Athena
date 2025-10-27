@@ -145,7 +145,7 @@ class athena(PayloadType):
         #     description="Hide the window when running the payload"
         # ),
     ]
-    c2_profiles = ["http", "websocket", "slack", "smb", "discord", "github"]
+    c2_profiles = ["http", "httpx", "websocket", "slack", "smb", "discord", "github"]
 
     async def prepareWinExe(self, output_path):
         pe = pefile.PE(os.path.join(output_path, "{}.exe".format(self.get_parameter("assemblyname"))))
@@ -264,6 +264,40 @@ class athena(PayloadType):
             f.write(baseConfigFile)
         self.addProfile(agent_build_path, "Websocket")
 
+    async def buildHttpx(self, agent_build_path, c2):
+        baseConfigFile = open("{}/Agent.Profiles.Httpx/Base.txt".format(agent_build_path.name), "r").read()
+        baseConfigFile = baseConfigFile.replace("%UUID%", self.uuid)
+        
+        for key, val in c2.get_parameters_dict().items():
+            if key == "encrypted_exchange_check":
+                if val == "T":
+                    baseConfigFile = baseConfigFile.replace(key, "True")
+                else:
+                    baseConfigFile = baseConfigFile.replace(key, "False")
+            elif key == "callback_domains":
+                # Handle array of domains
+                if isinstance(val, list):
+                    baseConfigFile = baseConfigFile.replace(f'"{key}".Split(\',\')', f'new string[] {{{", ".join([f\'"{d}\'' for d in val])}}}')
+                else:
+                    baseConfigFile = baseConfigFile.replace(f'"{key}"', str(val))
+            elif key == "raw_c2_config":
+                # Base64 encode the config if it's not already encoded
+                import base64
+                try:
+                    # Try to decode to check if already base64
+                    base64.b64decode(str(val))
+                    configData = str(val)
+                except:
+                    # Not base64, encode it
+                    configData = base64.b64encode(str(val).encode('utf-8')).decode('utf-8')
+                baseConfigFile = baseConfigFile.replace(f'"{key}"', configData)
+            else:
+                baseConfigFile = baseConfigFile.replace(f'"{key}"', str(val))
+        
+        with open("{}/Agent.Profiles.Httpx/HttpxProfile.cs".format(agent_build_path.name), "w") as f:
+            f.write(baseConfigFile)
+        self.addProfile(agent_build_path, "Httpx")
+
     def buildConfig(self, agent_build_path, c2):
         #I could modify this to be more efficient, but it doesn't take that long so screw it. Maybe later.
         baseConfigFile = open("{}/AthenaCore/Config/AgentConfig.cs".format(agent_build_path.name), "r").read()
@@ -295,6 +329,12 @@ class athena(PayloadType):
         project_path = os.path.join(agent_build_path.name, "Agent.Profiles.{}".format(profile), "Agent.Profiles.{}.csproj".format(profile))
         p = subprocess.Popen(["dotnet", "add", "AthenaCore", "reference", project_path], cwd=agent_build_path.name)
         p.wait()
+        
+        # For httpx profile, also add HttpxTransform reference
+        if profile.lower() == "httpx":
+            transform_project_path = os.path.join(agent_build_path.name, "Agent.Profiles.HttpxTransform", "Agent.Profiles.HttpxTransform.csproj")
+            p = subprocess.Popen(["dotnet", "add", "AthenaCore", "reference", transform_project_path], cwd=agent_build_path.name)
+            p.wait()
     
     def addAgentMod(self, agent_build_path, mod):
         mod_map = {
@@ -414,6 +454,9 @@ class athena(PayloadType):
                 if profile["name"] == "http":
                     roots_replace += "<assembly fullname=\"Agent.Profiles.HTTP\"/>" + '\n'
                     await self.buildHTTP(agent_build_path, c2)
+                elif profile["name"] == "httpx":
+                    roots_replace += "<assembly fullname=\"Agent.Profiles.Httpx\"/>" + '\n'
+                    await self.buildHttpx(agent_build_path, c2)
                 elif profile["name"] == "smb":
                     roots_replace += "<assembly fullname=\"Agent.Profiles.SMB\"/>" + '\n'
                     await self.buildSMB(agent_build_path, c2)
