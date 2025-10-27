@@ -279,12 +279,12 @@ class athena(PayloadType):
             elif key == "callback_domains":
                 # Handle array of domains
                 if isinstance(val, list):
-                    # Build the replacement string properly with Split(',')
+                    # Build the replacement string properly as a string array
                     domain_strings = ['"' + str(d) + '"' for d in val]
-                    domain_array = "new string[] {" + ", ".join(domain_strings) + "}.Split(',')"
+                    domain_array = "new string[] {" + ", ".join(domain_strings) + "}"
                     baseConfigFile = baseConfigFile.replace("callback_domains", domain_array)
                 else:
-                    baseConfigFile = baseConfigFile.replace("callback_domains", '"' + str(val) + '"')
+                    baseConfigFile = baseConfigFile.replace("callback_domains", "new string[] {" + '"' + str(val) + '"' + "}")
             elif key == "failover_threshold":
                 baseConfigFile = baseConfigFile.replace("failover_threshold", str(val))
             elif key == "timeout":

